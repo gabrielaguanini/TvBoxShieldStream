@@ -1,19 +1,15 @@
 plugins {
-    alias(libs.plugins.android.application)
+    id("com.android.application")
 }
 
 android {
     namespace = "com.example.tvboxshieldstream"
-    compileSdk {
-        version = release(36) {
-            minorApiLevel = 1
-        }
-    }
+    compileSdk = 34
 
     defaultConfig {
         applicationId = "com.example.tvboxshieldstream"
         minSdk = 23
-        targetSdk = 36
+        targetSdk = 34
         versionCode = 1
         versionName = "1.0"
 
@@ -29,6 +25,7 @@ android {
             )
         }
     }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
@@ -36,11 +33,12 @@ android {
 }
 
 dependencies {
-    implementation(libs.appcompat)
-    implementation(libs.material)
-    implementation(libs.activity)
-    implementation(libs.constraintlayout)
-    testImplementation(libs.junit)
-    androidTestImplementation(libs.ext.junit)
-    androidTestImplementation(libs.espresso.core)
+    implementation("androidx.appcompat:appcompat:1.6.1")
+    implementation("androidx.core:core-ktx:1.12.0")
+    implementation("com.google.android.material:material:1.9.0")
+    implementation("androidx.constraintlayout:constraintlayout:2.1.4")
+
+    // RecyclerView y CardView
+    implementation("androidx.recyclerview:recyclerview:1.2.1")
+    implementation("androidx.cardview:cardview:1.0.0")
 }

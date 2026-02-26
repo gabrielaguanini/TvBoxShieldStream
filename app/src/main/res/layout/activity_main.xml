@@ -5,30 +5,32 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:padding="32dp"
-    android:background="#000000">
+    android:background="#121212">
 
-    <GridLayout
-        android:id="@+id/gridButtons"
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recyclerApps"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        android:columnCount="4"
-        android:alignmentMode="alignMargins"
-        android:useDefaultMargins="true"
+        android:clipToPadding="false"
+        android:paddingBottom="24dp"
         app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toTopOf="@+id/containerAgregar"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"/>
+
+
+    <!-- Botón Agregar Apps a ancho completo -->
+    <FrameLayout
+        android:id="@+id/containerAgregar"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <!-- Botón normal -->
-        <include layout="@layout/buttons_lanzar_apps"/>
-
-        <include layout="@layout/buttons_lanzar_apps"/>
-        <include layout="@layout/buttons_lanzar_apps"/>
-        <include layout="@layout/buttons_lanzar_apps"/>
-
-        <!-- Botón AGREGAR destacado -->
         <include layout="@layout/button_agregar_apps"/>
 
-    </GridLayout>
+    </FrameLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>
