@@ -1,20 +1,18 @@
-package com.example.tvboxshieldstream.adapters;
+package com.example.tvboxshieldstream.dialogs;
 
 import android.app.Dialog;
 import android.content.Context;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
-import android.view.ViewGroup;
-import android.widget.CheckBox;
-import android.widget.ImageView;
-import android.widget.TextView;
+import android.widget.Button;
 
 import androidx.annotation.NonNull;
-import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.tvboxshieldstream.R;
+import com.example.tvboxshieldstream.adapters.SelectorAppsAdapter;
 import com.example.tvboxshieldstream.models.AppItem;
 
 import java.util.ArrayList;
@@ -22,81 +20,55 @@ import java.util.List;
 
 public class SelectorAppsDialog extends Dialog {
 
-    private List<AppItem> disponibles;
-    private List<AppItem> seleccionadas;
-    private OnAppsSeleccionadasListener listener;
-
     public interface OnAppsSeleccionadasListener {
         void onAppsSeleccionadas(List<AppItem> seleccionadas);
     }
 
-    public SelectorAppsDialog(@NonNull Context context, List<AppItem> disponibles, List<AppItem> seleccionadas, OnAppsSeleccionadasListener listener) {
-        super(context);
-        this.disponibles = disponibles;
-        this.seleccionadas = new ArrayList<>(seleccionadas);
+    private final Context context;
+    private final List<AppItem> appsDisponibles;
+    private final List<AppItem> appsSeleccionadas;
+    private final OnAppsSeleccionadasListener listener;
+
+    private List<AppItem> seleccionTemporal;
+
+    public SelectorAppsDialog(
+            @NonNull Context context,
+            List<AppItem> appsDisponibles,
+            List<AppItem> appsSeleccionadas,
+            OnAppsSeleccionadasListener listener
+    ) {
+        super(context);   // <- FIX
+        this.context = context;
+        this.appsDisponibles = appsDisponibles;
+        this.appsSeleccionadas = appsSeleccionadas;
         this.listener = listener;
     }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.dialog_selector_apps);
 
-        RecyclerView recycler = findViewById(R.id.recyclerSelectorApps);
-        recycler.setLayoutManager(new LinearLayoutManager(getContext()));
-        recycler.setAdapter(new SelectorAdapter());
-    }
+        View v = LayoutInflater.from(context).inflate(R.layout.dialog_selector_apps, null);
+        setContentView(v);
 
-    private class SelectorAdapter extends RecyclerView.Adapter<SelectorAdapter.ViewHolder> {
+        RecyclerView recycler = v.findViewById(R.id.recyclerSelectorApps);
+        recycler.setLayoutManager(new GridLayoutManager(context, 5));
 
-        @NonNull
-        @Override
-        public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-            View v = LayoutInflater.from(parent.getContext())
-                    .inflate(R.layout.item_seleccion_app, parent, false);
-            return new ViewHolder(v);
-        }
+        seleccionTemporal = new ArrayList<>(appsSeleccionadas);
 
-        @Override
-        public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
-            AppItem app = disponibles.get(position);
-            holder.txtNombre.setText(app.nombre);
-            holder.imgIcono.setImageDrawable(app.icono);
-            holder.checkBox.setChecked(seleccionadas.contains(app));
+        SelectorAppsAdapter adapter =
+                new SelectorAppsAdapter(appsDisponibles, seleccionTemporal);
 
-            holder.itemView.setOnClickListener(v -> {
-                if (seleccionadas.contains(app)) {
-                    seleccionadas.remove(app);
-                    holder.checkBox.setChecked(false);
-                } else {
-                    seleccionadas.add(app);
-                    holder.checkBox.setChecked(true);
-                }
-            });
-        }
+        recycler.setAdapter(adapter);
 
-        @Override
-        public int getItemCount() {
-            return disponibles.size();
-        }
+        Button btnAceptar = v.findViewById(R.id.btnAceptar);
+        Button btnCerrar = v.findViewById(R.id.btnCerrar);
 
-        class ViewHolder extends RecyclerView.ViewHolder {
-            ImageView imgIcono;
-            TextView txtNombre;
-            CheckBox checkBox;
+        btnAceptar.setOnClickListener(view -> {
+            listener.onAppsSeleccionadas(seleccionTemporal);
+            dismiss();
+        });
 
-            ViewHolder(View itemView) {
-                super(itemView);
-                imgIcono = itemView.findViewById(R.id.imgIconoApp);
-                txtNombre = itemView.findViewById(R.id.txtNombreApp);
-                checkBox = itemView.findViewById(R.id.checkboxApp);
-            }
-        }
-    }
-
-    @Override
-    public void dismiss() {
-        super.dismiss();
-        listener.onAppsSeleccionadas(seleccionadas);
+        btnCerrar.setOnClickListener(view -> dismiss());
     }
 }

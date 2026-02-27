@@ -13,7 +13,7 @@ import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.tvboxshieldstream.adapters.AppsAdapter;
-import com.example.tvboxshieldstream.adapters.SelectorAppsDialog;
+import com.example.tvboxshieldstream.dialogs.SelectorAppsDialog;
 import com.example.tvboxshieldstream.models.AppItem;
 
 import java.util.ArrayList;
