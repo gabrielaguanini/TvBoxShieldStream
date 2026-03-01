@@ -2,8 +2,7 @@
     android:orientation="vertical"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:padding="24dp"
-    android:background="#121212">
+    android:padding="24dp">
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recyclerSelectorApps"
@@ -22,14 +21,22 @@
             android:id="@+id/btnCerrar"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Cerrar" />
+            android:text="Cerrar"
+            android:focusable="true"
+            android:clickable="true"
+            android:foreground="@drawable/foco_personalizado"/>
 
         <Button
             android:id="@+id/btnAceptar"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Aceptar"
-            android:layout_marginStart="16dp" />
+            android:layout_marginStart="16dp"
+            android:focusable="true"
+            android:clickable="true"
+            android:foreground="@drawable/foco_personalizado"/>
+
+
     </LinearLayout>
 
 </LinearLayout>

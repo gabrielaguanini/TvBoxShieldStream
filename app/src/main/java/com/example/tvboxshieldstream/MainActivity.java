@@ -43,6 +43,8 @@ public class MainActivity extends AppCompatActivity {
         adapter = new AppsAdapter(appsSeleccionadas);
         recycler.setAdapter(adapter);
 
+        recycler.post(() -> recycler.requestFocus());
+
         FrameLayout btnAgregar = findViewById(R.id.containerAgregar);
         btnAgregar.setOnClickListener(v -> abrirSelectorApps());
     }

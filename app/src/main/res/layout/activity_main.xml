@@ -16,7 +16,9 @@
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toTopOf="@+id/containerAgregar"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"/>
+        app:layout_constraintEnd_toEndOf="parent"
+        android:descendantFocusability="afterDescendants"
+        />
 
 
     <!-- Botón Agregar Apps a ancho completo -->
@@ -27,7 +29,10 @@
         android:layout_marginTop="16dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
+        app:layout_constraintEnd_toEndOf="parent"
+        android:focusable="true"
+        android:clickable="true"
+        android:foreground="@drawable/foco_personalizado">
 
         <include layout="@layout/button_agregar_apps"/>
 

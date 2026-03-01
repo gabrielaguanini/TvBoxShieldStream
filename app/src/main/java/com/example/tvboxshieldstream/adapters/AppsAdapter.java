@@ -36,6 +36,9 @@ public class AppsAdapter extends RecyclerView.Adapter<AppsAdapter.AppViewHolder>
         holder.txtNombreApp.setText(item.nombre);
         holder.imgIconoApp.setImageDrawable(item.icono);
 
+        holder.itemView.setFocusable(true);
+        holder.itemView.setFocusableInTouchMode(true);
+
         holder.itemView.setOnClickListener(v ->
                 v.getContext().startActivity(item.intent)
         );

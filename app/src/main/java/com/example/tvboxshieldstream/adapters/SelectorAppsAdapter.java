@@ -52,6 +52,13 @@ public class SelectorAppsAdapter extends RecyclerView.Adapter<SelectorAppsAdapte
                 seleccionadas.remove(app);
             }
         });
+        holder.itemView.setFocusable(true);
+        holder.itemView.setFocusableInTouchMode(true);
+
+        holder.itemView.setOnClickListener(v -> {
+            boolean nuevoEstado = !holder.checkBox.isChecked();
+            holder.checkBox.setChecked(nuevoEstado);
+        });
     }
 
     @Override
