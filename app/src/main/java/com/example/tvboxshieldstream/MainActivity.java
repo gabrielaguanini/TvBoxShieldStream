@@ -6,8 +6,11 @@ import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.graphics.drawable.Drawable;
 import android.os.Bundle;
+import android.view.KeyEvent;
+import android.view.View;
 import android.widget.FrameLayout;
 
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -22,6 +25,8 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+
+import android.graphics.Rect;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -40,14 +45,51 @@ public class MainActivity extends AppCompatActivity {
 
         RecyclerView recycler = findViewById(R.id.recyclerApps);
         recycler.setLayoutManager(new GridLayoutManager(this, 5));
+
+        recycler.addItemDecoration(new RecyclerView.ItemDecoration() {
+            @Override
+            public void getItemOffsets(@NonNull Rect outRect, @NonNull View view,
+                                       @NonNull RecyclerView parent, @NonNull RecyclerView.State state) {
+                int espacio = 24; // espacio real entre botones (en px)
+                outRect.set(espacio, espacio, espacio, espacio);
+            }
+        });
+
         adapter = new AppsAdapter(appsSeleccionadas);
         recycler.setAdapter(adapter);
 
         recycler.post(() -> recycler.requestFocus());
 
-        FrameLayout btnAgregar = findViewById(R.id.containerAgregar);
+        View btnAgregar = findViewById(R.id.btnAgregarApps);
+
         btnAgregar.setOnClickListener(v -> abrirSelectorApps());
+
+        btnAgregar.setOnKeyListener((v, keyCode, event) -> {
+            if (event.getAction() == KeyEvent.ACTION_DOWN &&
+                    (keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
+                            keyCode == KeyEvent.KEYCODE_ENTER)) {
+
+                abrirSelectorApps();
+                return true;
+            }
+            return false;
+        });
+
+        btnAgregar.setOnClickListener(v -> abrirSelectorApps());
+
+        btnAgregar.setOnKeyListener((v, keyCode, event) -> {
+            if (event.getAction() == KeyEvent.ACTION_DOWN &&
+                    (keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
+                            keyCode == KeyEvent.KEYCODE_ENTER)) {
+
+                abrirSelectorApps();
+                return true;
+            }
+            return false;
+        });
+
     }
+
 
     // Obtener apps visibles para el usuario
     private List<AppItem> obtenerAppsInstaladas() {
