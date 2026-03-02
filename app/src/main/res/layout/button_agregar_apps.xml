@@ -3,9 +3,9 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/btnAgregarApps"
     android:layout_width="match_parent"
-    android:layout_height="80dp"
+    android:layout_height="50dp"
     android:layout_marginTop="8dp"
-    app:cardCornerRadius="14dp"
+    app:cardCornerRadius="20dp"
     app:cardElevation="8dp"
     android:focusable="true"
     android:focusableInTouchMode="true"
@@ -20,19 +20,20 @@
         android:padding="16dp">
 
         <ImageView
-            android:layout_width="36dp"
-            android:layout_height="36dp"
+            android:layout_width="15dp"
+            android:layout_height="15dp"
             android:src="@drawable/ic_btn_agregar_apps"
-            android:scaleType="fitCenter"/>
+            android:scaleType="fitCenter"
+            android:contentDescription="@string/contentDescription"/>
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="12dp"
             android:text="Agregar apps"
-            android:textSize="18sp"
+            android:textSize="12sp"
             android:textStyle="bold"
-            android:textColor="#FF9800"/>
+            android:textColor="@color/black"/>
 
     </LinearLayout>
 

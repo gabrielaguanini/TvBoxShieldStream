@@ -75,7 +75,7 @@ public class SelectorAppsAdapter extends RecyclerView.Adapter<SelectorAppsAdapte
             super(itemView);
             imgIcono = itemView.findViewById(R.id.imgIcono);
             txtNombre = itemView.findViewById(R.id.txtNombre);
-            checkBox = itemView.findViewById(R.id.checkSeleccion);
+            checkBox = itemView.findViewById(R.id.checkBox);
         }
     }
 }

@@ -5,10 +5,11 @@ import android.content.Context;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.Button;
 
 import androidx.annotation.NonNull;
-import androidx.recyclerview.widget.GridLayoutManager;
+import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.tvboxshieldstream.R;
@@ -51,8 +52,16 @@ public class SelectorAppsDialog extends Dialog {
         View v = LayoutInflater.from(context).inflate(R.layout.dialog_selector_apps, null);
         setContentView(v);
 
+        // Forzar ancho del dialog para TV
+        getWindow().setLayout(
+                (int) (context.getResources().getDisplayMetrics().widthPixels * 0.5), // 50% del ancho de la pantalla
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        );
+
         RecyclerView recycler = v.findViewById(R.id.recyclerSelectorApps);
-        recycler.setLayoutManager(new GridLayoutManager(context, 5));
+        recycler.setLayoutManager(
+                new LinearLayoutManager(getContext(), RecyclerView.VERTICAL, false)
+        );
 
         seleccionTemporal = new ArrayList<>(appsSeleccionadas);
 

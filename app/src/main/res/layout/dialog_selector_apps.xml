@@ -3,6 +3,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:padding="24dp">
+    
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recyclerSelectorApps"
@@ -24,7 +25,8 @@
             android:text="Cerrar"
             android:focusable="true"
             android:clickable="true"
-            android:foreground="@drawable/foco_personalizado"/>
+            android:foreground="@drawable/foco_personalizado"
+            />
 
         <Button
             android:id="@+id/btnAceptar"
