@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:weightSum="3"
+    android:padding="12dp">
+
+    <FrameLayout
+        android:id="@+id/escudo_1"
+        android:layout_width="0dp"
+        android:layout_height="140dp"
+        android:layout_weight="1"
+        android:layout_margin="8dp"
+        android:focusable="true"
+        android:clickable="true"
+        android:foreground="@drawable/foco_personalizado">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:background="#0C2624">
+
+            <ImageView
+                android:layout_width="54dp"
+                android:layout_height="54dp"
+                android:padding="12dp"
+                android:src="@android:drawable/ic_menu_manage"
+                app:tint="#FFC107" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="SISTEMA"
+                android:textColor="#FFFFFF"
+                android:textStyle="bold"
+                android:textSize="13sp"
+                android:layout_marginTop="8dp" />
+        </LinearLayout>
+    </FrameLayout>
+
+    <FrameLayout
+        android:id="@+id/escudo_2"
+        android:layout_width="0dp"
+        android:layout_height="140dp"
+        android:layout_weight="1"
+        android:layout_margin="8dp"
+        android:focusable="true"
+        android:clickable="true"
+        android:foreground="@drawable/foco_personalizado">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:background="#0C2624">
+
+            <ImageView
+                android:layout_width="64dp"
+                android:layout_height="64dp"
+                android:padding="8dp"
+                android:src="@android:drawable/checkbox_on_background"
+                app:tint="#4CAF50" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="PROTEGIDO"
+                android:textColor="#FFFFFF"
+                android:textStyle="bold"
+                android:textSize="13sp"
+                android:layout_marginTop="8dp" />
+        </LinearLayout>
+    </FrameLayout>
+
+    <FrameLayout
+        android:id="@+id/escudo_3"
+        android:layout_width="0dp"
+        android:layout_height="140dp"
+        android:layout_weight="1"
+        android:layout_margin="8dp"
+        android:focusable="true"
+        android:clickable="true"
+        android:foreground="@drawable/foco_personalizado">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:background="#0C2624">
+
+            <ImageView
+                android:layout_width="54dp"
+                android:layout_height="54dp"
+                android:padding="12dp"
+                android:src="@android:drawable/ic_menu_delete"
+                app:tint="#2196F3" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="LIMPIAR"
+                android:textColor="#FFFFFF"
+                android:textStyle="bold"
+                android:textSize="13sp"
+                android:layout_marginTop="8dp" />
+        </LinearLayout>
+    </FrameLayout>
+</LinearLayout>
