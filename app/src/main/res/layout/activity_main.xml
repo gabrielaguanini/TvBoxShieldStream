@@ -1,39 +1,166 @@
 <?xml version="1.0" encoding="utf-8"?>
+
 <androidx.constraintlayout.widget.ConstraintLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/mainRoot"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:padding="16dp"
-    android:background="#121212">
+    android:background="@drawable/bg_main"
+    android:focusableInTouchMode="true">
 
-    <include
-        android:id="@+id/includeEscudos"
-        layout="@layout/layout_escudos"
-        android:layout_width="0dp"
+    <!-- TITULO -->
+
+    <TextView
+        android:id="@+id/titleText"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:text="Centro de Seguridad"
+        android:textColor="#FFFFFF"
+        android:textSize="28sp"
+        android:textStyle="bold"
+        android:layout_marginTop="28dp"
+        android:layout_marginStart="28dp"
         app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"/>
+
+    <!-- CONTENEDOR ESCUDOS -->
+
+    <LinearLayout
+        android:id="@+id/shieldContainer"
+        android:layout_width="0dp"
+        android:layout_height="166dp"
+        android:orientation="horizontal"
+        android:layout_marginTop="32dp"
+        android:layout_marginStart="24dp"
+        android:layout_marginEnd="24dp"
+        android:gravity="center"
+        app:layout_constraintTop_toBottomOf="@id/titleText"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <!-- ESCUDO 1 -->
+
+        <FrameLayout
+            android:id="@+id/escudo_1"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:layout_margin="10dp"
+            android:background="@drawable/shield_background"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:clickable="true"
+            android:foreground="@drawable/foco_personalizado"
+            android:nextFocusDown="@id/recyclerApps">
+
+            <ImageView
+                android:id="@+id/btnShield1"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:padding="35dp"
+                android:src="@drawable/ic_shield"
+                android:contentDescription="Escaneo de seguridad"
+                android:scaleType="centerInside"
+                app:tint="#00E5A8"/>
+
+        </FrameLayout>
+
+        <!-- ESCUDO 2 -->
+
+        <FrameLayout
+            android:id="@+id/escudo_2"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:layout_margin="10dp"
+            android:background="@drawable/shield_background"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:clickable="true"
+            android:foreground="@drawable/foco_personalizado"
+            android:nextFocusDown="@id/recyclerApps">
+
+            <ImageView
+                android:id="@+id/btnShield2"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:padding="35dp"
+                android:src="@drawable/ic_shield"
+                android:contentDescription="Protección de aplicaciones"
+                android:scaleType="centerInside"
+                app:tint="#00E5A8"/>
+
+        </FrameLayout>
+
+        <!-- ESCUDO 3 -->
+
+        <FrameLayout
+            android:id="@+id/escudo_3"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:layout_margin="10dp"
+            android:background="@drawable/shield_background"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:clickable="true"
+            android:foreground="@drawable/foco_personalizado"
+            android:nextFocusDown="@id/recyclerApps">
+
+            <ImageView
+                android:id="@+id/btnShield3"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:padding="35dp"
+                android:src="@drawable/ic_shield"
+                android:contentDescription="Configuración de seguridad"
+                android:scaleType="centerInside"
+                app:tint="#00E5A8"/>
+
+        </FrameLayout>
+
+    </LinearLayout>
+
+    <!-- TITULO LISTA -->
+
+    <TextView
+        android:id="@+id/appsTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Aplicaciones instaladas"
+        android:textColor="#FFFFFF"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:layout_marginTop="24dp"
+        android:layout_marginStart="28dp"
+        app:layout_constraintTop_toBottomOf="@id/shieldContainer"
+        app:layout_constraintStart_toStartOf="parent"/>
+
+    <!-- RECYCLER VIEW -->
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recyclerApps"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        android:layout_marginTop="8dp"
-        android:clipToPadding="false"
-        android:paddingBottom="16dp"
-        app:layout_constraintTop_toBottomOf="@id/includeEscudos"
-        app:layout_constraintBottom_toTopOf="@+id/containerAgregar"
+        android:layout_marginTop="12dp"
+        android:layout_marginStart="24dp"
+        android:layout_marginEnd="24dp"
+        android:focusable="true"
+        android:focusableInTouchMode="true"
+        android:nextFocusUp="@id/escudo_1"
+        app:layout_constraintTop_toBottomOf="@id/appsTitle"
+        app:layout_constraintBottom_toTopOf="@id/containerAgregar"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        android:descendantFocusability="afterDescendants" />
+        app:layout_constraintEnd_toEndOf="parent"/>
+
+    <!-- BOTON AGREGAR -->
 
     <FrameLayout
         android:id="@+id/containerAgregar"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
+        android:layout_margin="12dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">

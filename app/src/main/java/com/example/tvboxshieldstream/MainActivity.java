@@ -12,7 +12,9 @@ import android.widget.FrameLayout;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.recyclerview.widget.GridLayoutManager;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.SnapHelper;
+import androidx.recyclerview.widget.LinearSnapHelper;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.tvboxshieldstream.adapters.AppsAdapter;
@@ -39,55 +41,73 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        // Cargar apps disponibles y seleccionadas
         appsDisponibles = obtenerAppsInstaladas();
         appsSeleccionadas = new ArrayList<>();
         cargarAppsSeleccionadas();
 
+        // RecyclerView para apps a lanzar
         RecyclerView recycler = findViewById(R.id.recyclerApps);
-        recycler.setLayoutManager(new GridLayoutManager(this, 5));
 
+// Layout horizontal tipo carrusel
+        LinearLayoutManager layoutManager =
+                new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false);
+        recycler.setLayoutManager(layoutManager);
+
+// Adapter
+        adapter = new AppsAdapter(appsSeleccionadas);
+        recycler.setAdapter(adapter);
+
+// Espaciado entre items
+        int espacio = 24; // px
         recycler.addItemDecoration(new RecyclerView.ItemDecoration() {
             @Override
             public void getItemOffsets(@NonNull Rect outRect, @NonNull View view,
                                        @NonNull RecyclerView parent, @NonNull RecyclerView.State state) {
-                int espacio = 24; // espacio real entre botones (en px)
-                outRect.set(espacio, espacio, espacio, espacio);
+                outRect.left = espacio;
+                outRect.right = espacio;
             }
         });
 
-        adapter = new AppsAdapter(appsSeleccionadas);
-        recycler.setAdapter(adapter);
+// SnapHelper para centrar item seleccionado
+        SnapHelper snapHelper = new LinearSnapHelper();
+        snapHelper.attachToRecyclerView(recycler);
 
+        // Centrado de foco
+        recycler.setOnKeyListener((v, keyCode, event) -> {
+
+            if (event.getAction() != KeyEvent.ACTION_DOWN) return false;
+
+            int pos = layoutManager.findFirstCompletelyVisibleItemPosition();
+
+            if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
+                recycler.smoothScrollToPosition(pos + 1);
+                return true;
+            }
+
+            if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
+                recycler.smoothScrollToPosition(pos - 1);
+                return true;
+            }
+
+            return false;
+        });
+
+        // Foco automático al iniciar
         recycler.post(() -> recycler.requestFocus());
 
+        // --- Botón Agregar Apps ---
         View btnAgregar = findViewById(R.id.btnAgregarApps);
-
         btnAgregar.setOnClickListener(v -> abrirSelectorApps());
-
         btnAgregar.setOnKeyListener((v, keyCode, event) -> {
             if (event.getAction() == KeyEvent.ACTION_DOWN &&
                     (keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
                             keyCode == KeyEvent.KEYCODE_ENTER)) {
-
                 abrirSelectorApps();
                 return true;
             }
             return false;
         });
-
-        btnAgregar.setOnClickListener(v -> abrirSelectorApps());
-
-        btnAgregar.setOnKeyListener((v, keyCode, event) -> {
-            if (event.getAction() == KeyEvent.ACTION_DOWN &&
-                    (keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
-                            keyCode == KeyEvent.KEYCODE_ENTER)) {
-
-                abrirSelectorApps();
-                return true;
-            }
-            return false;
-        });
-
     }
 
 
