@@ -33,15 +33,29 @@ public class AppsAdapter extends RecyclerView.Adapter<AppsAdapter.AppViewHolder>
     @Override
     public void onBindViewHolder(@NonNull AppViewHolder holder, int position) {
         AppItem item = apps.get(position);
-        holder.txtNombreApp.setText(item.nombre);
-        holder.imgIconoApp.setImageDrawable(item.icono);
 
+        // 1. Ponemos el nombre como siempre
+        holder.txtNombreApp.setText(item.nombre);
+
+        // 2. CARGA INTELIGENTE: Obtenemos el PackageManager del contexto de la vista
+        android.content.pm.PackageManager pm = holder.itemView.getContext().getPackageManager();
+
+        // 3. Usamos el metodo que creamos en AppItem para cargar el icono solo si es necesario
+        // Esto evita cargar 50 iconos en la RAM al mismo tiempo
+        holder.imgIconoApp.setImageDrawable(item.cargarIconoSiEsNecesario(pm));
+
+        // Configuración de foco para D-Pad (Control remoto)
         holder.itemView.setFocusable(true);
         holder.itemView.setFocusableInTouchMode(true);
 
-        holder.itemView.setOnClickListener(v ->
-                v.getContext().startActivity(item.intent)
-        );
+        holder.itemView.setOnClickListener(v -> {
+            try {
+                v.getContext().startActivity(item.intent);
+            } catch (Exception e) {
+                android.widget.Toast.makeText(v.getContext(),
+                        "No se pudo abrir la aplicación", android.widget.Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 
     @Override

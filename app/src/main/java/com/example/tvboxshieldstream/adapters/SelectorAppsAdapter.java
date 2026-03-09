@@ -37,9 +37,15 @@ public class SelectorAppsAdapter extends RecyclerView.Adapter<SelectorAppsAdapte
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         AppItem app = appsDisponibles.get(position);
 
+        // 1. Nombre de la app
         holder.txtNombre.setText(app.nombre);
-        holder.imgIcono.setImageDrawable(app.icono);
 
+        // 2. CARGA INTELIGENTE (Crucial para no congelar la TV Box)
+        android.content.pm.PackageManager pm = holder.itemView.getContext().getPackageManager();
+        // Cargamos el icono solo si es necesario y lo mostramos
+        holder.imgIcono.setImageDrawable(app.cargarIconoSiEsNecesario(pm));
+
+        // 3. Lógica del Checkbox (sin cambios, está muy bien)
         holder.checkBox.setOnCheckedChangeListener(null);
         holder.checkBox.setChecked(seleccionadas.contains(app));
 
@@ -52,6 +58,8 @@ public class SelectorAppsAdapter extends RecyclerView.Adapter<SelectorAppsAdapte
                 seleccionadas.remove(app);
             }
         });
+
+        // 4. Configuración para el mando a distancia (D-Pad)
         holder.itemView.setFocusable(true);
         holder.itemView.setFocusableInTouchMode(true);
 

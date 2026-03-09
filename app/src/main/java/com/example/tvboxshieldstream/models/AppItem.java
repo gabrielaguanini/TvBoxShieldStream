@@ -1,17 +1,33 @@
 package com.example.tvboxshieldstream.models;
 
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.drawable.Drawable;
 
 public class AppItem {
     public String nombre;
-    public Drawable icono;
+    public String packageName;
     public Intent intent;
+    // Mantenemos el nombre 'icono' para que el resto del código compile
+    public Drawable icono;
 
-    public AppItem(String nombre, Drawable icono, Intent intent) {
+    public AppItem(String nombre, String packageName, Intent intent) {
         this.nombre = nombre;
-        this.icono = icono;
+        this.packageName = packageName;
         this.intent = intent;
+        // IMPORTANTE: No cargamos el icono aquí. Lo dejamos en null.
+    }
+
+    // Este metodo lo usaremos en los Adaptadores para cargar la imagen solo cuando se vea
+    public Drawable cargarIconoSiEsNecesario(PackageManager pm) {
+        if (this.icono == null) {
+            try {
+                this.icono = pm.getApplicationIcon(packageName);
+            } catch (Exception e) {
+                return null;
+            }
+        }
+        return this.icono;
     }
 
     @Override
@@ -19,11 +35,11 @@ public class AppItem {
         if (this == obj) return true;
         if (!(obj instanceof AppItem)) return false;
         AppItem other = (AppItem) obj;
-        return nombre.equals(other.nombre);
+        return packageName != null && packageName.equals(other.packageName);
     }
 
     @Override
     public int hashCode() {
-        return nombre.hashCode();
+        return packageName != null ? packageName.hashCode() : 0;
     }
 }
