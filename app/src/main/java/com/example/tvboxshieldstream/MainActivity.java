@@ -6,8 +6,11 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.graphics.Rect;
+import android.net.Uri;
 import android.net.VpnService;
+import android.os.Build;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.view.KeyEvent;
 import android.view.View;
 import android.widget.Toast;
@@ -27,6 +30,14 @@ import java.util.Set;
 import com.example.tvboxshieldstream.adapters.AppsAdapter;
 import com.example.tvboxshieldstream.dialogs.SelectorAppsDialog;
 import com.example.tvboxshieldstream.models.AppItem;
+
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+
+import androidx.core.content.ContextCompat;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -103,9 +114,6 @@ public class MainActivity extends AppCompatActivity {
 
     // Selector de apps minimalista con iconos y checkboxes
     private void abrirSelectorApps() {
-        // 1. Sugiere al sistema que limpie la memoria basura antes de cargar iconos
-        System.gc();
-
         SelectorAppsDialog dialog = new SelectorAppsDialog(this, appsDisponibles, appsSeleccionadas, new SelectorAppsDialog.OnAppsSeleccionadasListener() {
             @Override
             public void onAppsSeleccionadas(List<AppItem> seleccionadas) {
@@ -152,19 +160,29 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void configurarListaApps() {
+
         recycler = findViewById(R.id.recyclerApps);
-        administradorLayout = new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false);
+
+        administradorLayout = new LinearLayoutManager(
+                this,
+                LinearLayoutManager.HORIZONTAL,
+                false
+        );
+
         recycler.setLayoutManager(administradorLayout);
 
         adaptador = new AppsAdapter(appsSeleccionadas);
         recycler.setAdapter(adaptador);
 
-        // Decoración y Snap para TV
         int espacio = 24;
+
         recycler.addItemDecoration(new RecyclerView.ItemDecoration() {
             @Override
-            public void getItemOffsets(@NonNull Rect outRect, @NonNull View view,
-                                       @NonNull RecyclerView parent, @NonNull RecyclerView.State state) {
+            public void getItemOffsets(@NonNull Rect outRect,
+                                       @NonNull View view,
+                                       @NonNull RecyclerView parent,
+                                       @NonNull RecyclerView.State state) {
+
                 outRect.left = espacio;
                 outRect.right = espacio;
             }
@@ -173,19 +191,35 @@ public class MainActivity extends AppCompatActivity {
         SnapHelper snapHelper = new LinearSnapHelper();
         snapHelper.attachToRecyclerView(recycler);
 
-        // Control de navegación D-Pad
+        // Control navegación D-Pad
         recycler.setOnKeyListener((v, keyCode, event) -> {
+
             if (event.getAction() != KeyEvent.ACTION_DOWN) return false;
-            int pos = administradorLayout.findFirstCompletelyVisibleItemPosition();
+
+            int pos = administradorLayout.findFirstVisibleItemPosition();
+
+            if (pos == RecyclerView.NO_POSITION) return false;
+
+            int total = adaptador.getItemCount();
 
             if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
-                recycler.smoothScrollToPosition(pos + 1);
+
+                if (pos + 1 < total) {
+                    recycler.smoothScrollToPosition(pos + 1);
+                }
+
                 return true;
             }
+
             if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
-                recycler.smoothScrollToPosition(pos - 1);
+
+                if (pos - 1 >= 0) {
+                    recycler.smoothScrollToPosition(pos - 1);
+                }
+
                 return true;
             }
+
             return false;
         });
     }
@@ -226,7 +260,7 @@ public class MainActivity extends AppCompatActivity {
                 java.io.FileOutputStream fos = openFileOutput("hosts.txt", android.content.Context.MODE_PRIVATE);
                 java.io.BufferedWriter escritor = new java.io.BufferedWriter(new java.io.OutputStreamWriter(fos));
 
-                int limite = modoAhorro ? 1 : 2;
+                int limite = modoAhorro ? 1 : URLS_PROTECCION.length;
 
                 for (int i = 0; i < limite; i++) {
                     descargarYGuardar(URLS_PROTECCION[i], escritor);
@@ -250,24 +284,50 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void manejarEscudoProteccion() {
-        // El sistema verifica si el permiso de VPN ya fue concedido previamente
-        Intent intentPermiso = VpnService.prepare(this);
+        android.util.Log.e("TVBoxShield", "PRESIONADO: Intentando iniciar VPN");
 
-        if (intentPermiso != null) {
-            // El sistema solicita el permiso al usuario abriendo la ventana de confirmación oficial
-            startActivityForResult(intentPermiso, CODIGO_PERMISO_VPN);
-        } else {
-            // El sistema inicia directamente el motor al contar ya con la autorización necesaria
-            encenderMotorVpn();
+        // 1. Verificar "Aparecer encima" PRIMERO (Es el permiso de sistema que Samsung te reclama)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (!Settings.canDrawOverlays(this)) {
+                android.util.Log.d("TVBoxShield", "Abriendo ajustes de 'Aparecer encima'...");
+                Intent intentOverlay = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:" + getPackageName()));
+                startActivity(intentOverlay);
+                return; // Salimos para que el usuario active el permiso y vuelva a tocar el botón
+            }
+        }
+
+        if (esMotorVpnActivo()) {
+            android.util.Log.d("TVBoxShield", "Motor activo: Procediendo a apagar");
+            apagarMotorVpn();
+            return;
+        }
+
+        // 2. Ahora sí, vamos por la Llave (VPN)
+        try {
+            Intent intentPermisoVpn = VpnService.prepare(this);
+            if (intentPermisoVpn != null) {
+                android.util.Log.d("TVBoxShield", "Mostrando diálogo oficial de la Llave");
+                startActivityForResult(intentPermisoVpn, CODIGO_PERMISO_VPN);
+            } else {
+                android.util.Log.d("TVBoxShield", "Permiso de Llave ya listo, encendiendo...");
+                encenderMotorVpn();
+            }
+        } catch (Exception e) {
+            android.util.Log.e("TVBoxShield", "ERROR CRÍTICO: " + e.getMessage());
         }
     }
+    private void apagarMotorVpn() {
+        Intent intentMotor = new Intent(this, com.example.tvboxshieldstream.vpn.AdVpnService.class);
 
+        stopService(intentMotor);
+        Toast.makeText(this, "Escudo de Protección DESACTIVADO", Toast.LENGTH_SHORT).show();
+    }
     private void encenderMotorVpn() {
         // El sistema crea una intención dirigida a la clase del servicio VPN
         Intent intentMotor = new Intent(this, com.example.tvboxshieldstream.vpn.AdVpnService.class);
 
-        // El sistema pone en marcha el servicio en segundo plano
-        startService(intentMotor);
+        androidx.core.content.ContextCompat.startForegroundService(this, intentMotor);
 
         // El sistema notifica al usuario que la protección se encuentra activa
         Toast.makeText(this, "Escudo de Protección ACTIVADO", Toast.LENGTH_SHORT).show();
@@ -306,7 +366,9 @@ public class MainActivity extends AppCompatActivity {
     private boolean esConsolaGamaBaja() {
         ActivityManager.MemoryInfo mi = new ActivityManager.MemoryInfo();
         ActivityManager activityManager = (ActivityManager) getSystemService(ACTIVITY_SERVICE);
-        activityManager.getMemoryInfo(mi);
+        if (activityManager != null) {
+            activityManager.getMemoryInfo(mi);
+        }
 
         // Cálculo de RAM en Megabytes
         long totalRam = mi.totalMem / (1024 * 1024);
@@ -321,27 +383,46 @@ public class MainActivity extends AppCompatActivity {
         return totalRam < 1000;
     }
 
-    private void descargarYGuardar(String direccion, java.io.BufferedWriter escritor) throws Exception {
-        // Los protocolos de red inician la conexión con la URL proporcionada
-        java.net.URL url = new java.net.URL(direccion);
-        java.net.HttpURLConnection conexion = (java.net.HttpURLConnection) url.openConnection();
+    private void descargarYGuardar(String direccion, BufferedWriter escritor) throws Exception {
+
+        URL url = new URL(direccion);
+        HttpURLConnection conexion = (HttpURLConnection) url.openConnection();
+
         conexion.setConnectTimeout(5000);
+        conexion.setReadTimeout(10000);
         conexion.connect();
 
-        // Los sistemas de validación comprueban que el servidor responda correctamente
-        if (conexion.getResponseCode() == java.net.HttpURLConnection.HTTP_OK) {
-            // Los lectores de flujo extraen los datos del servidor
-            java.io.BufferedReader lector = new java.io.BufferedReader(new java.io.InputStreamReader(conexion.getInputStream()));
+        if (conexion.getResponseCode() == HttpURLConnection.HTTP_OK) {
+
+            BufferedReader lector = new BufferedReader(
+                    new InputStreamReader(conexion.getInputStream())
+            );
+
             String linea;
 
-            // Los motores de transferencia vuelcan cada línea en nuestro archivo local
+            int contador = 0;
+            int limite = 200000;   // máximo de líneas permitidas
+
             while ((linea = lector.readLine()) != null) {
+
+                linea = linea.trim();
+
+                if (linea.isEmpty()) continue;
+                if (linea.startsWith("#")) continue;
+
                 escritor.write(linea);
                 escritor.newLine();
+
+                contador++;
+
+                if (contador >= limite) {
+                    break;
+                }
             }
+
             lector.close();
         }
-        // Los procesos de cierre liberan la conexión para ahorrar recursos en la TV
+
         conexion.disconnect();
     }
 
@@ -393,27 +474,18 @@ public class MainActivity extends AppCompatActivity {
 // --- MÉTODOS DE CONTROL DEL ESTADO DEL MOTOR ---
 
     private boolean esMotorVpnActivo() {
-        ActivityManager administrador = (ActivityManager) getSystemService(ACTIVITY_SERVICE);
-        // Buscamos en la lista de servicios que están corriendo actualmente
-        for (ActivityManager.RunningServiceInfo servicio : administrador.getRunningServices(Integer.MAX_VALUE)) {
-            // Comparamos el nombre de nuestra clase de servicio
-            if (com.example.tvboxshieldstream.vpn.AdVpnService.class.getName().equals(servicio.service.getClassName())) {
-                return true;
-            }
-        }
-        return false;
+        return com.example.tvboxshieldstream.vpn.AdVpnService.activo;
     }
 
     private void reiniciarMotorSilenciosamente() {
-        // Creamos la intención para despertar al servicio
+
+        // Creamos la intención para despertar al servicio VPN
         Intent intentMotor = new Intent(this, com.example.tvboxshieldstream.vpn.AdVpnService.class);
 
-        // Al llamar a startService mientras ya corre, Android ejecuta 'onStartCommand'
-        // en el servicio existente, lo que dispara 'configurarYTunelar()' con los nuevos cambios.
-        startService(intentMotor);
+        // IMPORTANTE: Android 8+ requiere startForegroundService para servicios foreground
+        androidx.core.content.ContextCompat.startForegroundService(this, intentMotor);
 
-        // Un pequeño aviso de que la configuración se aplicó en caliente
+        // Aviso al usuario
         Toast.makeText(this, "Refrescando escudos...", Toast.LENGTH_SHORT).show();
     }
 }
-
