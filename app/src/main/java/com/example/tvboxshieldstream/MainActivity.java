@@ -20,6 +20,8 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.LinearSnapHelper;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.recyclerview.widget.SnapHelper;
+
+import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -38,6 +40,11 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 
 import androidx.core.content.ContextCompat;
+
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -286,35 +293,26 @@ public class MainActivity extends AppCompatActivity {
     private void manejarEscudoProteccion() {
         android.util.Log.e("TVBoxShield", "PRESIONADO: Intentando iniciar VPN");
 
-        // 1. Verificar "Aparecer encima" PRIMERO (Es el permiso de sistema que Samsung te reclama)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            if (!Settings.canDrawOverlays(this)) {
-                android.util.Log.d("TVBoxShield", "Abriendo ajustes de 'Aparecer encima'...");
-                Intent intentOverlay = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                        Uri.parse("package:" + getPackageName()));
-                startActivity(intentOverlay);
-                return; // Salimos para que el usuario active el permiso y vuelva a tocar el botón
-            }
-        }
-
+        // 1. Si ya está activo, lo apagamos
         if (esMotorVpnActivo()) {
             android.util.Log.d("TVBoxShield", "Motor activo: Procediendo a apagar");
             apagarMotorVpn();
             return;
         }
 
-        // 2. Ahora sí, vamos por la Llave (VPN)
+        // 2. Vamos directo por la Llave de la VPN (Sin pedir overlays)
         try {
             Intent intentPermisoVpn = VpnService.prepare(this);
             if (intentPermisoVpn != null) {
                 android.util.Log.d("TVBoxShield", "Mostrando diálogo oficial de la Llave");
                 startActivityForResult(intentPermisoVpn, CODIGO_PERMISO_VPN);
             } else {
+                // Si devuelve null, es porque Android YA nos dio permiso antes
                 android.util.Log.d("TVBoxShield", "Permiso de Llave ya listo, encendiendo...");
                 encenderMotorVpn();
             }
         } catch (Exception e) {
-            android.util.Log.e("TVBoxShield", "ERROR CRÍTICO: " + e.getMessage());
+            android.util.Log.e("TVBoxShield", "ERROR CRÍTICO AL PREPARAR: " + e.getMessage());
         }
     }
     private void apagarMotorVpn() {
@@ -387,6 +385,20 @@ public class MainActivity extends AppCompatActivity {
 
         URL url = new URL(direccion);
         HttpURLConnection conexion = (HttpURLConnection) url.openConnection();
+
+        // Creamos un gestor que confía en TODO (Cuidado: usar solo para las listas de hosts)
+        TrustManager[] trustAllCerts = new TrustManager[]{
+                new X509TrustManager() {
+                    public java.security.cert.X509Certificate[] getAcceptedIssuers() { return null; }
+                    public void checkClientTrusted(X509Certificate[] certs, String authType) {}
+                    public void checkServerTrusted(X509Certificate[] certs, String authType) {}
+                }
+        };
+
+        SSLContext sc = SSLContext.getInstance("SSL");
+        sc.init(null, trustAllCerts, new java.security.SecureRandom());
+        HttpsURLConnection.setDefaultSSLSocketFactory(sc.getSocketFactory());
+
 
         conexion.setConnectTimeout(5000);
         conexion.setReadTimeout(10000);
