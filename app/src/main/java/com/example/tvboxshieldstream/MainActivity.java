@@ -347,11 +347,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void manejarEscudoRed() {
-        // Conecta el motor de DNS (AdGuard) e IPv6 Block
-        Toast.makeText(this, "Verificando integridad de Red...", Toast.LENGTH_SHORT).show();
-    }
-
     private void gestionarFocoInicial() {
         // Postponemos la petición de foco para asegurar que el layout esté listo
         recycler.post(() -> {

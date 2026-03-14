@@ -3,15 +3,24 @@ package com.example.tvboxshieldstream.dns;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import android.net.VpnService; // Importante
 
 public class DnsResolver {
     private static final String UPSTREAM_DNS = "94.140.14.14"; // AdGuard DNS
 
-    public static byte[] resolve(byte[] request) {
+    // Le pasamos el VpnService como parámetro para poder usar 'protect'
+    public static byte[] resolve(byte[] request, VpnService vpnService) {
         DatagramSocket socket = null;
         try {
             socket = new DatagramSocket();
-            socket.setSoTimeout(1500); // No esperar más de 1.5s
+
+            // --- EL PASO CRÍTICO ---
+            // Esto evita que la consulta DNS se meta dentro de tu propia VPN
+            if (vpnService != null) {
+                vpnService.protect(socket);
+            }
+
+            socket.setSoTimeout(1500);
 
             InetAddress server = InetAddress.getByName(UPSTREAM_DNS);
             DatagramPacket outPacket = new DatagramPacket(request, request.length, server, 53);

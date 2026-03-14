@@ -13,6 +13,7 @@ import androidx.core.app.NotificationCompat;
 
 import com.example.tvboxshieldstream.R;
 import com.example.tvboxshieldstream.dns.DnsParser;
+import com.example.tvboxshieldstream.dns.DnsResolver;
 import com.example.tvboxshieldstream.dns.DnsResponseBuilder;
 import com.example.tvboxshieldstream.filter.HostFilter;
 
@@ -70,117 +71,162 @@ public class AdVpnService extends VpnService {
 
 // 1. Modificamos el método principal
 private void configurarMotorDNS() {
-    SharedPreferences prefs = getSharedPreferences("ConfigShield", MODE_PRIVATE);
-    String dnsPrimario = prefs.getString("dns_primaria", "8.8.8.8");
-    String dnsSecundario = prefs.getString("dns_secundaria", "8.8.4.4");
-
-    // 1. LIMPIEZA: Cerramos cualquier interfaz previa para evitar "Bad address" por conflicto de IP
+    // 1. Limpieza radical
     if (vpnInterface != null) {
-        try {
-            vpnInterface.close();
-            vpnInterface = null;
-        } catch (Exception e) {
-            Log.e("TVBoxShield", "Error al cerrar interfaz previa");
-        }
+        try { vpnInterface.close(); vpnInterface = null; } catch (Exception ignored) {}
     }
 
     try {
         VpnService.Builder builder = new VpnService.Builder();
 
-        // 2. CONFIGURACIÓN ESTÁNDAR (Intento Global)
-        builder.setSession("TvBoxShieldDNS")
-                .addAddress("10.1.1.1", 32)
-                .addDnsServer(dnsPrimario)
-                .addDnsServer(dnsSecundario)
-                .addRoute("0.0.0.0", 0)
-                .setMtu(1500)
-                .setBlocking(false);
+        // 2. Lo mínimo que pide Android para no fallar
+        builder.setSession("TvBoxShield")
+                .addAddress("172.19.0.1", 30) // IP segura, máscara mínima
+                .setMtu(1280);               // MTU estándar de seguridad
 
-        // 3. TRUCO IPv4: Forzamos a que el sistema prefiera IPv4
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            builder.allowFamily(OsConstants.AF_INET); // Solo IPv4
-            // No agregamos AF_INET6 para forzar el tráfico hacia nuestro túnel v4
-        }
+        // 3. LA PRUEBA DE FUEGO: Solo una ruta global.
+        // A veces el sistema rechaza DNS sueltos, pero acepta la ruta global.
+        builder.addRoute("0.0.0.0", 0);
+
+        // 4. IMPORTANTE: Comenta estas líneas un momento
+        // No agregues DNS, no agregues DisallowedApplication, no agregues allowFamily.
+        // Queremos ver si el kernel acepta el túnel "vacío".
 
         vpnInterface = builder.establish();
 
         if (vpnInterface != null) {
-            Log.d("TVBoxShield", "¡TÚNEL MONTADO! Modo Global.");
+            Log.d("TVBoxShield", "¡POR FIN! Interfaz establecida.");
             iniciarProcesadorDNS();
         }
 
-    } catch (IllegalArgumentException e) {
-        // 4. FALLBACK 1: Si el kernel es estricto (como el tuyo), entramos aquí
-        if (e.getMessage() != null && e.getMessage().contains("Bad address")) {
-            Log.w("TVBoxShield", "Kernel rechazó ruta global. Aplicando modo DNS66 Fallback...");
-            reintentarConfiguracionMinima(dnsPrimario, dnsSecundario);
-        } else {
-            Log.e("TVBoxShield", "Error de configuración: " + e.getMessage());
-        }
     } catch (Exception e) {
-        Log.e("TVBoxShield", "Error crítico: " + e.getMessage());
+        // Si aquí sigue dando Bad Address, el problema es el permiso o el VpnService mismo
+        Log.e("TVBoxShield", "Error persistente: " + e.getMessage());
+        e.printStackTrace();
     }
 }
+    private void iniciarProcesadorDNS() {
+        if (threadProcesador != null) {
+            threadProcesador.interrupt();
+        }
 
-    // 2. El método de emergencia (DNS66 Fallback) corregido
-    private void reintentarConfiguracionMinima(String d1, String d2) {
-        try {
-            VpnService.Builder builder = new VpnService.Builder();
-            builder.setSession("TvBoxShieldDNS");
+        threadProcesador = new Thread(() -> {
+            Log.d("TVBoxShield", ">>> HILO DE PROCESAMIENTO INICIADO <<<");
 
-            // PASO CLAVE: Si el DNS es 127.0.0.1, no podemos usar 10.1.1.1
-            // Usamos una IP neutra pero con máscara 8 para cubrir casi todo el rango
-            builder.addAddress("10.0.0.1", 8);
+            // Usamos el FileDescriptor del vpnInterface para leer y escribir paquetes IP
+            try (FileInputStream in = new FileInputStream(vpnInterface.getFileDescriptor());
+                 FileOutputStream out = new FileOutputStream(vpnInterface.getFileDescriptor())) {
 
-            // DNS66: No agregues rutas si el kernel da Bad Address.
-            // El addDnsServer ya le dice al sistema que mande el tráfico DNS al túnel.
-            builder.addDnsServer(d1);
-            if (d2 != null) builder.addDnsServer(d2);
+                // Buffer de tamaño estándar para paquetes MTU 1500 + cabeceras
+                byte[] buffer = new byte[16384];
 
-            builder.setMtu(1500);
-            builder.setBlocking(false);
+                while (!Thread.currentThread().isInterrupted()) {
+                    int longitud = in.read(buffer);
 
-            vpnInterface = builder.establish();
+                    if (longitud > 0) {
+                        byte protocolo = buffer[9];
 
-            if (vpnInterface != null) {
-                Log.d("TVBoxShield", "¡VICTORIA! Túnel montado con máscara amplia.");
-                iniciarProcesadorDNS();
+                        // --- CASO ESPECIAL: DNS (UDP Puerto 53) ---
+                        if (protocolo == 17) {
+                            int puertoDestino = ((buffer[22] & 0xFF) << 8) | (buffer[23] & 0xFF);
+
+                            if (puertoDestino == 53) {
+                                Log.i("TVBoxShield", "¡PAQUETE DNS DETECTADO!");
+                                String dominio = DnsParser.parseDomain(buffer);
+                                Log.d("TVBoxShield", "Dominio solicitado: " + dominio);
+
+                                if (hostFilter.isBlocked(dominio)) {
+                                    // Si es bloqueado, fabricamos la respuesta falsa y la enviamos al túnel
+                                    byte[] fakeResponse = DnsResponseBuilder.buildBlockedResponse(buffer);
+                                    out.write(fakeResponse); // Respondemos 0.0.0.0
+                                    continue; // Saltamos al siguiente paquete, no hace falta procesar más
+                                } else {
+                                    Log.d("TVBoxShield", "Resolviendo dominio: " + dominio);
+
+                                    // 1. Extraemos SOLO los bytes DNS (del 28 al final) para enviarlos a internet
+                                    byte[] preguntaDnsPura = extraerSoloDns(buffer, longitud);
+
+                                    // 2. El resolver nos devuelve la respuesta DNS pura del servidor real
+                                    byte[] respuestaDnsPura = DnsResolver.resolve(preguntaDnsPura, this);
+
+                                    if (respuestaDnsPura != null) {
+                                        // 3. ¡PASO CRÍTICO!: Fabricamos un paquete IP/UDP completo
+                                        // para envolver la respuesta DNS y que Android la acepte.
+                                        byte[] paqueteCompleto = PaqueteConstructor.crearRespuestaIP(buffer, respuestaDnsPura);
+
+                                        out.write(paqueteCompleto);
+                                        Log.i("TVBoxShield", "Respuesta real enviada al túnel.");
+                                    }
+                                }
+                            }
+                        }
+
+                        // --- CASO GENERAL: Todo lo demás (TCP, otros UDP, etc.) ---
+                        // IMPORTANTE: Si no es un DNS bloqueado, el paquete debe seguir su viaje.
+                        // Pero en una VPN "Global", tú debes gestionar la salida a internet de estos bytes.
+                        // Como estamos en modo "DNS-Only" (estilo DNS66), si configuraste bien las rutas
+                        // en el Builder, el tráfico normal NO debería entrar aquí, solo el DNS.
+                    }
+                }
+            } catch (IOException e) {
+                Log.e("TVBoxShield", "Error de lectura/escritura en el túnel: " + e.getMessage());
+            } catch (Exception e) {
+                Log.e("TVBoxShield", "Error crítico en el hilo procesador: " + e.getMessage());
+            } finally {
+                Log.d("TVBoxShield", ">>> HILO DE PROCESAMIENTO FINALIZADO <<<");
             }
-        } catch (Exception e) {
-            // ULTIMATUM: Si esto falla, el problema es que el emulador no tiene el módulo TUN
-            Log.e("TVBoxShield", "Fallo final: " + e.getMessage());
-            intentarSinNada();
+        }, "TVBoxShield-Worker");
+
+        threadProcesador.setPriority(Thread.MAX_PRIORITY); // Prioridad alta para evitar lag en la TV Box
+        threadProcesador.start();
+    }
+
+    private byte[] extraerSoloDns(byte[] buffer, int longitud) {
+        // El DNS comienza en el byte 28 (20 de IP + 8 de UDP)
+        int inicioDns = 28;
+        int tamanoDns = longitud - inicioDns;
+
+        if (tamanoDns <= 0) return null;
+
+        byte[] dnsPuro = new byte[tamanoDns];
+        System.arraycopy(buffer, inicioDns, dnsPuro, 0, tamanoDns);
+        return dnsPuro;
+    }
+
+    public class PaqueteConstructor {
+
+        public static byte[] crearRespuestaIP(byte[] peticionOriginal, byte[] respuestaDnsPura) {
+            int tamanoTotal = 20 + 8 + respuestaDnsPura.length;
+            byte[] paquetePuro = new byte[tamanoTotal];
+
+            // --- CABECERA IP (20 bytes) ---
+            paquetePuro[0] = 0x45; // Versión 4, IHL 5
+            paquetePuro[2] = (byte) (tamanoTotal >> 8);
+            paquetePuro[3] = (byte) (tamanoTotal & 0xFF);
+            paquetePuro[9] = 17; // Protocolo UDP
+
+            // Invertimos las IPs: El que era destino ahora es origen
+            System.arraycopy(peticionOriginal, 16, paquetePuro, 12, 4); // Source IP
+            System.arraycopy(peticionOriginal, 12, paquetePuro, 16, 4); // Dest IP
+
+            // --- CABECERA UDP (8 bytes) ---
+            // Invertimos puertos
+            System.arraycopy(peticionOriginal, 22, paquetePuro, 20, 2); // Source Port
+            System.arraycopy(peticionOriginal, 20, paquetePuro, 22, 2); // Dest Port
+
+            int tamanoUdp = 8 + respuestaDnsPura.length;
+            paquetePuro[24] = (byte) (tamanoUdp >> 8);
+            paquetePuro[25] = (byte) (tamanoUdp & 0xFF);
+
+            // --- DATOS DNS ---
+            System.arraycopy(respuestaDnsPura, 0, paquetePuro, 28, respuestaDnsPura.length);
+
+            return paquetePuro;
         }
     }
 
-    private void intentarSinNada() {
-        try {
-            // La versión más "pelada" posible que acepta un Android viejo
-            vpnInterface = new VpnService.Builder()
-                    .addAddress("10.255.255.1", 30)
-                    .addDnsServer("8.8.8.8")
-                    .establish();
-            if (vpnInterface != null) Log.d("TVBoxShield", "Montado con IP de emergencia 10.255");
-        } catch (Exception e) {
-            Log.e("TVBoxShield", "El kernel del emulador bloquea VpnService.");
-        }
-    }
 
-    private void reintentarConIPNeutra(String d1, String d2) {
-        try {
-            vpnInterface = new VpnService.Builder()
-                    .addAddress("172.19.0.1", 30) // Rango privado B, muy común en VPNs
-                    .addDnsServer(d1)
-                    .addRoute(d1, 32)
-                    .setSession("TvBoxShieldDNS")
-                    .establish();
-            if (vpnInterface != null) Log.d("TVBoxShield", "Montado con IP Neutra 172.x");
-        } catch (Exception e) {
-            Log.e("TVBoxShield", "Dispositivo incompatible con VpnService: " + e.getMessage());
-        }
-    }
-
-    // 2. El procesador de paquetes UDP (El "Homenaje" a DNS66)
+   // 2. El procesador de paquetes UDP (El "Homenaje" a DNS66)
     private byte[] construirPaqueteRespuesta(byte[] paqueteOriginal, byte[] payloadDnsFalso) {
         // 20 bytes (IP) + 8 bytes (UDP) + longitud del DNS falso
         int longitudTotal = 28 + payloadDnsFalso.length;
@@ -226,93 +272,8 @@ private void configurarMotorDNS() {
         return respuesta;
     }
 
-    private void enviarRespuestaBloqueada(byte[] dnsResponse, byte[] originalPacket,
-                                          FileOutputStream out, int puertoCliente) {
 
-        try {
 
-            int dnsLen = dnsResponse.length;
-            int totalLen = 28 + dnsLen;
-
-            byte[] packet = new byte[totalLen];
-
-            packet[0] = 0x45;
-            packet[2] = (byte) (totalLen >> 8);
-            packet[3] = (byte) (totalLen & 0xFF);
-            packet[8] = 64;
-            packet[9] = 17;
-
-            System.arraycopy(originalPacket, 16, packet, 12, 4);
-            System.arraycopy(originalPacket, 12, packet, 16, 4);
-
-            calcularChecksumIP(packet);
-
-            packet[20] = 0;
-            packet[21] = 53;
-
-            packet[22] = (byte) (puertoCliente >> 8);
-            packet[23] = (byte) (puertoCliente & 0xFF);
-
-            int udpLen = 8 + dnsLen;
-
-            packet[24] = (byte) (udpLen >> 8);
-            packet[25] = (byte) (udpLen & 0xFF);
-
-            packet[26] = 0;
-            packet[27] = 0;
-
-            System.arraycopy(dnsResponse, 0, packet, 28, dnsLen);
-
-            synchronized (out) {
-                out.write(packet);
-            }
-
-        } catch (Exception e) {
-            Log.e("TVBoxShield", "Error bloqueando DNS: " + e.getMessage());
-        }
-    }
-
-    private void iniciarProcesadorDNS() {
-        if (threadProcesador != null) {
-            threadProcesador.interrupt();
-        }
-
-        threadProcesador = new Thread(() -> {
-            Log.d("TVBoxShield", ">>> HILO DE PROCESAMIENTO INICIADO <<<");
-
-            // Usamos el FileDescriptor del vpnInterface para leer y escribir paquetes IP
-            try (FileInputStream in = new FileInputStream(vpnInterface.getFileDescriptor());
-                 FileOutputStream out = new FileOutputStream(vpnInterface.getFileDescriptor())) {
-
-                // Buffer de tamaño estándar para paquetes MTU 1500 + cabeceras
-                byte[] buffer = new byte[16384];
-
-                while (!Thread.currentThread().isInterrupted()) {
-                    int length = in.read(buffer);
-
-                    if (length > 0) {
-                        // Log de depuración para confirmar que el tráfico entra
-                        // Si no ves este log al navegar, la VPN no está capturando nada.
-                        Log.v("TVBoxShield", "Paquete capturado: " + length + " bytes");
-
-                        // DNS66 trabaja a nivel de bytes.
-                        // Mandamos el paquete al procesador y le pasamos el 'out'
-                        // para que pueda inyectar la respuesta de bloqueo si es necesario.
-                        procesarPaqueteDNS(buffer, length, out);
-                    }
-                }
-            } catch (IOException e) {
-                Log.e("TVBoxShield", "Error de lectura/escritura en el túnel: " + e.getMessage());
-            } catch (Exception e) {
-                Log.e("TVBoxShield", "Error crítico en el hilo procesador: " + e.getMessage());
-            } finally {
-                Log.d("TVBoxShield", ">>> HILO DE PROCESAMIENTO FINALIZADO <<<");
-            }
-        }, "TVBoxShield-Worker");
-
-        threadProcesador.setPriority(Thread.MAX_PRIORITY); // Prioridad alta para evitar lag en la TV Box
-        threadProcesador.start();
-    }
 
     private void procesarPaqueteDNS(byte[] datos, int len, FileOutputStream out) {
         try {
