@@ -3,24 +3,32 @@ package com.example.tvboxshieldstream.dns;
 public class DnsParser {
     public static String parseDomain(byte[] packet) {
         try {
-            // El header DNS mide 12 bytes, el nombre empieza en el byte 12 (offset 28 si es paquete IP completo)
-            // Pero si ya extrajiste el payload UDP, empezamos en 12.
-            int pos = 28;
+            // 20 (IP) + 8 (UDP) + 12 (DNS Header) = 40
+            int pos = 40;
             StringBuilder domain = new StringBuilder();
+
+            // Verificamos que el paquete sea lo suficientemente largo
+            if (packet.length <= pos) return null;
 
             while (pos < packet.length) {
                 int len = packet[pos++] & 0xFF;
+
+                // Si el largo es 0, terminamos (fin del nombre)
                 if (len == 0) break;
 
+                // Si ya hay algo en el dominio, agregamos un punto
                 if (domain.length() > 0) domain.append(".");
 
+                // Leemos la cantidad de caracteres que indica 'len'
                 for (int i = 0; i < len; i++) {
-                    domain.append((char) packet[pos++]);
+                    if (pos < packet.length) {
+                        domain.append((char) packet[pos++]);
+                    }
                 }
             }
             return domain.toString();
         } catch (Exception e) {
-            return null;
+            return "error.parsing";
         }
     }
 }

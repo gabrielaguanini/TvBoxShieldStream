@@ -71,7 +71,6 @@ public class AdVpnService extends VpnService {
 
 // 1. Modificamos el método principal
 private void configurarMotorDNS() {
-    // 1. Limpieza radical
     if (vpnInterface != null) {
         try { vpnInterface.close(); vpnInterface = null; } catch (Exception ignored) {}
     }
@@ -79,30 +78,30 @@ private void configurarMotorDNS() {
     try {
         VpnService.Builder builder = new VpnService.Builder();
 
-        // 2. Lo mínimo que pide Android para no fallar
         builder.setSession("TvBoxShield")
-                .addAddress("172.19.0.1", 30) // IP segura, máscara mínima
-                .setMtu(1280);               // MTU estándar de seguridad
+                .addAddress("172.19.0.1", 30)
+                .setMtu(1280);
 
-        // 3. LA PRUEBA DE FUEGO: Solo una ruta global.
-        // A veces el sistema rechaza DNS sueltos, pero acepta la ruta global.
-        builder.addRoute("0.0.0.0", 0);
+        // --- EL CAMBIO CLAVE AQUÍ ---
+        // En lugar de 0.0.0.0 (todo el tráfico), capturamos solo las IPs de DNS comunes
+        // Esto obliga a que las preguntas de DNS pasen por tu código
+        builder.addRoute("8.8.8.8", 32);    // Google DNS
+        builder.addRoute("8.8.4.4", 32);    // Google DNS
+        builder.addRoute("1.1.1.1", 32);    // Cloudflare
+        builder.addRoute("94.140.14.14", 32); // AdGuard
 
-        // 4. IMPORTANTE: Comenta estas líneas un momento
-        // No agregues DNS, no agregues DisallowedApplication, no agregues allowFamily.
-        // Queremos ver si el kernel acepta el túnel "vacío".
+        // También nos agregamos a nosotros mismos como DNS del sistema
+        builder.addDnsServer("8.8.8.8");
 
         vpnInterface = builder.establish();
 
         if (vpnInterface != null) {
-            Log.d("TVBoxShield", "¡POR FIN! Interfaz establecida.");
+            Log.d("TVBoxShield", "¡MODO DNS-ONLY ACTIVO!");
             iniciarProcesadorDNS();
         }
 
     } catch (Exception e) {
-        // Si aquí sigue dando Bad Address, el problema es el permiso o el VpnService mismo
-        Log.e("TVBoxShield", "Error persistente: " + e.getMessage());
-        e.printStackTrace();
+        Log.e("TVBoxShield", "Error: " + e.getMessage());
     }
 }
     private void iniciarProcesadorDNS() {
@@ -111,85 +110,86 @@ private void configurarMotorDNS() {
         }
 
         threadProcesador = new Thread(() -> {
-            Log.d("TVBoxShield", ">>> HILO DE PROCESAMIENTO INICIADO <<<");
+            Log.i("TVBoxShield", ">>> HILO DE PROCESAMIENTO INICIADO <<<");
 
             // Usamos el FileDescriptor del vpnInterface para leer y escribir paquetes IP
             try (FileInputStream in = new FileInputStream(vpnInterface.getFileDescriptor());
                  FileOutputStream out = new FileOutputStream(vpnInterface.getFileDescriptor())) {
 
-                // Buffer de tamaño estándar para paquetes MTU 1500 + cabeceras
+                // Buffer de tamaño estándar para paquetes
                 byte[] buffer = new byte[16384];
 
                 while (!Thread.currentThread().isInterrupted()) {
                     int longitud = in.read(buffer);
 
                     if (longitud > 0) {
+                        // Verificamos Protocolo IP: 17 es UDP
                         byte protocolo = buffer[9];
 
-                        // --- CASO ESPECIAL: DNS (UDP Puerto 53) ---
                         if (protocolo == 17) {
+                            // Puerto destino en UDP está en los bytes 22 y 23
                             int puertoDestino = ((buffer[22] & 0xFF) << 8) | (buffer[23] & 0xFF);
 
                             if (puertoDestino == 53) {
-                                Log.i("TVBoxShield", "¡PAQUETE DNS DETECTADO!");
                                 String dominio = DnsParser.parseDomain(buffer);
-                                Log.d("TVBoxShield", "Dominio solicitado: " + dominio);
+                                Log.d("TVBoxShield", "Consulta detectada: " + dominio);
 
                                 if (hostFilter.isBlocked(dominio)) {
-                                    // Si es bloqueado, fabricamos la respuesta falsa y la enviamos al túnel
+                                    Log.w("TVBoxShield", "🚫 BLOQUEANDO: " + dominio);
                                     byte[] fakeResponse = DnsResponseBuilder.buildBlockedResponse(buffer);
-                                    out.write(fakeResponse); // Respondemos 0.0.0.0
-                                    continue; // Saltamos al siguiente paquete, no hace falta procesar más
+                                    if (fakeResponse != null) {
+                                        out.write(fakeResponse);
+                                    }
+                                    continue;
                                 } else {
-                                    Log.d("TVBoxShield", "Resolviendo dominio: " + dominio);
+                                    Log.i("TVBoxShield", "🌍 PERMITIDO: " + dominio);
 
-                                    // 1. Extraemos SOLO los bytes DNS (del 28 al final) para enviarlos a internet
                                     byte[] preguntaDnsPura = extraerSoloDns(buffer, longitud);
 
-                                    // 2. El resolver nos devuelve la respuesta DNS pura del servidor real
+                                    // El 'this' es para que DnsResolver pueda hacer socket.protect()
                                     byte[] respuestaDnsPura = DnsResolver.resolve(preguntaDnsPura, this);
 
                                     if (respuestaDnsPura != null) {
-                                        // 3. ¡PASO CRÍTICO!: Fabricamos un paquete IP/UDP completo
-                                        // para envolver la respuesta DNS y que Android la acepte.
+                                        // RECONSTRUCCIÓN CRÍTICA: Aquí usamos tu nueva clase
+                                        // Esto soluciona el problema de Time Out al dar un Checksum e ID válido
                                         byte[] paqueteCompleto = PaqueteConstructor.crearRespuestaIP(buffer, respuestaDnsPura);
 
-                                        out.write(paqueteCompleto);
-                                        Log.i("TVBoxShield", "Respuesta real enviada al túnel.");
+                                        if (paqueteCompleto != null) {
+                                            out.write(paqueteCompleto);
+                                            out.flush();
+                                            Log.d("TVBoxShield", "✅ Respuesta inyectada para: " + dominio);
+                                        }
+                                    } else {
+                                        Log.e("TVBoxShield", "❌ Sin respuesta del servidor para: " + dominio);
                                     }
                                 }
                             }
                         }
-
-                        // --- CASO GENERAL: Todo lo demás (TCP, otros UDP, etc.) ---
-                        // IMPORTANTE: Si no es un DNS bloqueado, el paquete debe seguir su viaje.
-                        // Pero en una VPN "Global", tú debes gestionar la salida a internet de estos bytes.
-                        // Como estamos en modo "DNS-Only" (estilo DNS66), si configuraste bien las rutas
-                        // en el Builder, el tráfico normal NO debería entrar aquí, solo el DNS.
+                        // Si no es DNS (Puerto 53), el paquete se ignora.
+                        // Con las rutas específicas de Google/Cloudflare, nada más debería entrar aquí.
                     }
                 }
             } catch (IOException e) {
-                Log.e("TVBoxShield", "Error de lectura/escritura en el túnel: " + e.getMessage());
+                Log.e("TVBoxShield", "Error de E/S en túnel: " + e.getMessage());
             } catch (Exception e) {
-                Log.e("TVBoxShield", "Error crítico en el hilo procesador: " + e.getMessage());
+                Log.e("TVBoxShield", "Error crítico en hilo: " + e.getMessage());
             } finally {
-                Log.d("TVBoxShield", ">>> HILO DE PROCESAMIENTO FINALIZADO <<<");
+                Log.i("TVBoxShield", ">>> HILO DE PROCESAMIENTO FINALIZADO <<<");
             }
         }, "TVBoxShield-Worker");
 
-        threadProcesador.setPriority(Thread.MAX_PRIORITY); // Prioridad alta para evitar lag en la TV Box
+        threadProcesador.setPriority(Thread.MAX_PRIORITY);
         threadProcesador.start();
     }
 
+    /**
+     * Corta los headers IP (20 bytes) y UDP (8 bytes) para dejar solo el mensaje DNS
+     */
     private byte[] extraerSoloDns(byte[] buffer, int longitud) {
-        // El DNS comienza en el byte 28 (20 de IP + 8 de UDP)
         int inicioDns = 28;
-        int tamanoDns = longitud - inicioDns;
-
-        if (tamanoDns <= 0) return null;
-
-        byte[] dnsPuro = new byte[tamanoDns];
-        System.arraycopy(buffer, inicioDns, dnsPuro, 0, tamanoDns);
+        if (longitud <= inicioDns) return null;
+        byte[] dnsPuro = new byte[longitud - inicioDns];
+        System.arraycopy(buffer, inicioDns, dnsPuro, 0, longitud - inicioDns);
         return dnsPuro;
     }
 
@@ -203,20 +203,44 @@ private void configurarMotorDNS() {
             paquetePuro[0] = 0x45; // Versión 4, IHL 5
             paquetePuro[2] = (byte) (tamanoTotal >> 8);
             paquetePuro[3] = (byte) (tamanoTotal & 0xFF);
-            paquetePuro[9] = 17; // Protocolo UDP
+
+            // Copiamos el ID original para que el sistema lo reconozca
+            paquetePuro[4] = peticionOriginal[4];
+            paquetePuro[5] = peticionOriginal[5];
+
+            paquetePuro[8] = 64;   // TTL
+            paquetePuro[9] = 17;   // Protocolo UDP
 
             // Invertimos las IPs: El que era destino ahora es origen
             System.arraycopy(peticionOriginal, 16, paquetePuro, 12, 4); // Source IP
             System.arraycopy(peticionOriginal, 12, paquetePuro, 16, 4); // Dest IP
 
+            // --- CÁLCULO DEL CHECKSUM IP (Obligatorio) ---
+            int sum = 0;
+            for (int i = 0; i < 20; i += 2) {
+                if (i == 10) continue; // Saltamos los bytes del checksum mismo
+                sum += ((paquetePuro[i] & 0xFF) << 8) | (paquetePuro[i + 1] & 0xFF);
+            }
+            while ((sum >> 16) > 0) sum = (sum & 0xFFFF) + (sum >> 16);
+            sum = ~sum;
+            paquetePuro[10] = (byte) (sum >> 8);
+            paquetePuro[11] = (byte) (sum & 0xFF);
+
             // --- CABECERA UDP (8 bytes) ---
-            // Invertimos puertos
-            System.arraycopy(peticionOriginal, 22, paquetePuro, 20, 2); // Source Port
-            System.arraycopy(peticionOriginal, 20, paquetePuro, 22, 2); // Dest Port
+            // Invertimos puertos: El DNS (53) ahora es el origen
+            paquetePuro[20] = peticionOriginal[22];
+            paquetePuro[21] = peticionOriginal[23];
+            // El puerto aleatorio del navegador ahora es el destino
+            paquetePuro[22] = peticionOriginal[20];
+            paquetePuro[23] = peticionOriginal[21];
 
             int tamanoUdp = 8 + respuestaDnsPura.length;
             paquetePuro[24] = (byte) (tamanoUdp >> 8);
             paquetePuro[25] = (byte) (tamanoUdp & 0xFF);
+
+            // Checksum UDP en 0 (Opcional en IPv4, ayuda a la velocidad)
+            paquetePuro[26] = 0;
+            paquetePuro[27] = 0;
 
             // --- DATOS DNS ---
             System.arraycopy(respuestaDnsPura, 0, paquetePuro, 28, respuestaDnsPura.length);
@@ -225,8 +249,7 @@ private void configurarMotorDNS() {
         }
     }
 
-
-   // 2. El procesador de paquetes UDP (El "Homenaje" a DNS66)
+    // 2. El procesador de paquetes UDP (El "Homenaje" a DNS66)
     private byte[] construirPaqueteRespuesta(byte[] paqueteOriginal, byte[] payloadDnsFalso) {
         // 20 bytes (IP) + 8 bytes (UDP) + longitud del DNS falso
         int longitudTotal = 28 + payloadDnsFalso.length;
@@ -271,8 +294,6 @@ private void configurarMotorDNS() {
 
         return respuesta;
     }
-
-
 
 
     private void procesarPaqueteDNS(byte[] datos, int len, FileOutputStream out) {
@@ -326,6 +347,12 @@ private void configurarMotorDNS() {
             Log.e("TVBoxShield", "Error en procesarPaqueteDNS: " + e.getMessage());
         }
     }
+
+
+
+
+
+
 
     private void enviarAlDnsReal(byte[] datos, int len, FileOutputStream out, int puertoOrigen) {
         // Abrimos un socket UDP para hablar con el DNS real (ej. 8.8.8.8)
