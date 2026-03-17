@@ -1,34 +1,32 @@
 package com.example.tvboxshieldstream.dns;
 
-public class DnsResponseBuilder {
-    public static byte[] buildBlockedResponse(byte[] request) {
-        // Clonamos la petición para mantener el ID de transacción
-        byte[] response = new byte[request.length + 16];
-        System.arraycopy(request, 0, response, 0, request.length);
+import java.util.Arrays;
 
-        // Flags: Respuesta estándar, sin error (pero nosotros daremos 0.0.0.0)
+public class DnsResponseBuilder {
+    public static byte[] buildBlockedResponse(byte[] query) {
+        if (query == null || query.length < 12) return query;
+
+        // Estructura de la respuesta: Puntero al nombre + Tipo A + Clase IN + TTL + IP 0.0.0.0
+        byte[] answerSection = {
+                (byte)0xC0, (byte)0x0C, // Nombre comprimido (puntero)
+                (byte)0x00, (byte)0x01, // Tipo A
+                (byte)0x00, (byte)0x01, // Clase IN
+                (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x3C, // TTL 60s
+                (byte)0x00, (byte)0x04, // Longitud IP
+                (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00  // IP: 0.0.0.0
+        };
+
+        byte[] response = new byte[query.length + answerSection.length];
+        System.arraycopy(query, 0, response, 0, query.length);
+        System.arraycopy(answerSection, 0, response, query.length, answerSection.length);
+
+        // Flags: QR=1 (Respuesta), AA=1, RCODE=0 (Sin error)
         response[2] = (byte) 0x81;
         response[3] = (byte) 0x80;
 
-        // Answer Count: 1
+        // Answer Count = 1 (Indispensable para que la app lea la IP)
+        response[6] = 0;
         response[7] = 1;
-
-        int pos = request.length;
-        // Nombre (puntero al nombre en la pregunta)
-        response[pos++] = (byte) 0xC0;
-        response[pos++] = 0x0C;
-        // Tipo A (IPv4)
-        response[pos++] = 0x00; response[pos++] = 0x01;
-        // Clase IN
-        response[pos++] = 0x00; response[pos++] = 0x01;
-        // TTL (60 segundos)
-        response[pos++] = 0x00; response[pos++] = 0x00;
-        response[pos++] = 0x00; response[pos++] = 0x3C;
-        // Data length (4 bytes para IP)
-        response[pos++] = 0x00; response[pos++] = 0x04;
-        // IP: 0.0.0.0
-        response[pos++] = 0; response[pos++] = 0;
-        response[pos++] = 0; response[pos++] = 0;
 
         return response;
     }

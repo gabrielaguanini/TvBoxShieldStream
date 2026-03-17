@@ -1,66 +1,74 @@
 package com.example.tvboxshieldstream.vpn;
 
 public class PaqueteConstructor {
-
-    /**
-     * Construye un paquete IP/UDP completo para envolver una respuesta DNS.
-     * @param peticionOriginal El paquete que capturamos del navegador (para copiar sus IDs).
-     * @param respuestaDnsPura Los bytes que nos devolvió el servidor DNS de AdGuard.
-     * @return Un array de bytes listo para ser escrito en el FileOutputStream del VPN.
-     */
     public static byte[] crearRespuestaIP(byte[] peticionOriginal, byte[] respuestaDnsPura) {
-        // Un paquete IP tiene 20 bytes de cabecera + 8 de UDP + el contenido
+        int ipHeaderLenOriginal = (peticionOriginal[0] & 0x0F) * 4;
         int tamanoTotal = 20 + 8 + respuestaDnsPura.length;
         byte[] paquete = new byte[tamanoTotal];
 
-        // --- CABECERA IP (20 bytes) ---
-        paquete[0] = 0x45; // Versión 4, IHL 5 (longitud estándar)
-        paquete[1] = 0x00; // Diferentiated Services
-        paquete[2] = (byte) (tamanoTotal >> 8); // Longitud total (Parte alta)
-        paquete[3] = (byte) (tamanoTotal & 0xFF); // Longitud total (Parte baja)
-
-        // !!! EL "DNI" DEL PAQUETE: Copiamos el Identification del original
-        paquete[4] = peticionOriginal[4];
+        // --- HEADER IP ---
+        paquete[0] = 0x45;
+        paquete[2] = (byte) (tamanoTotal >> 8);
+        paquete[3] = (byte) (tamanoTotal & 0xFF);
+        paquete[4] = peticionOriginal[4]; // Copiamos ID
         paquete[5] = peticionOriginal[5];
+        paquete[6] = 0x40; // Don't Fragment
+        paquete[8] = 64;   // TTL
+        paquete[9] = 17;   // UDP
 
-        paquete[6] = 0x40; // Flags: Don't Fragment (evita que el paquete se rompa)
-        paquete[7] = 0x00; // Fragment Offset
-        paquete[8] = 64;   // TTL (Time to Live)
-        paquete[9] = 17;   // Protocolo 17 = UDP
+        // IPs Invertidas
+        System.arraycopy(peticionOriginal, 16, paquete, 12, 4); // Dest -> Src
+        System.arraycopy(peticionOriginal, 12, paquete, 16, 4); // Src -> Dest
 
-        // INVERSIÓN DE DIRECCIONES IP
-        // El que era el destino de la pregunta (12-15) ahora es el origen de la respuesta
-        System.arraycopy(peticionOriginal, 16, paquete, 12, 4); // Source IP
-        System.arraycopy(peticionOriginal, 12, paquete, 16, 4); // Dest IP (Tu TV Box)
+        calcularChecksumIP(paquete);
 
-        // --- CÁLCULO DEL CHECKSUM IP ---
-        // Android descarta el paquete si esto no es exacto
-        int sum = 0;
-        for (int i = 0; i < 20; i += 2) {
-            if (i == 10) continue; // Saltamos el espacio del checksum
-            sum += ((paquete[i] & 0xFF) << 8) | (paquete[i + 1] & 0xFF);
-        }
-        while ((sum >> 16) > 0) sum = (sum & 0xFFFF) + (sum >> 16);
-        sum = ~sum;
-        paquete[10] = (byte) (sum >> 8);
-        paquete[11] = (byte) (sum & 0xFF);
-
-        // --- CABECERA UDP (8 bytes) ---
-        // INVERSIÓN DE PUERTOS
-        System.arraycopy(peticionOriginal, 22, paquete, 20, 2); // Source Port (53)
-        System.arraycopy(peticionOriginal, 20, paquete, 22, 2); // Dest Port (El de la App)
+        // --- HEADER UDP ---
+        // Puertos invertidos (SrcPort está en bytes 0-1 del UDP, DestPort en 2-3)
+        paquete[20] = peticionOriginal[ipHeaderLenOriginal + 2];
+        paquete[21] = peticionOriginal[ipHeaderLenOriginal + 3];
+        paquete[22] = peticionOriginal[ipHeaderLenOriginal + 0];
+        paquete[23] = peticionOriginal[ipHeaderLenOriginal + 1];
 
         int tamanoUdp = 8 + respuestaDnsPura.length;
         paquete[24] = (byte) (tamanoUdp >> 8);
         paquete[25] = (byte) (tamanoUdp & 0xFF);
 
-        // El Checksum UDP es opcional en IPv4, lo dejamos en 0
-        paquete[26] = 0x00;
-        paquete[27] = 0x00;
-
-        // --- CARGA ÚTIL (El mensaje DNS real) ---
+        // --- PAYLOAD DNS ---
         System.arraycopy(respuestaDnsPura, 0, paquete, 28, respuestaDnsPura.length);
 
+        calcularChecksumUDP(paquete, respuestaDnsPura.length);
+
         return paquete;
+    }
+
+    private static void calcularChecksumIP(byte[] buf) {
+        int sum = 0;
+        for (int i = 0; i < 20; i += 2) {
+            if (i == 10) continue;
+            sum += ((buf[i] & 0xFF) << 8) | (buf[i + 1] & 0xFF);
+        }
+        while ((sum >> 16) > 0) sum = (sum & 0xFFFF) + (sum >> 16);
+        sum = (~sum) & 0xFFFF;
+        buf[10] = (byte) (sum >> 8);
+        buf[11] = (byte) (sum & 0xFF);
+    }
+
+    private static void calcularChecksumUDP(byte[] buf, int dnsLen) {
+        long sum = 0;
+        // Pseudo-header IP
+        for (int i = 12; i < 20; i += 2) sum += ((buf[i] & 0xFF) << 8) | (buf[i + 1] & 0xFF);
+        sum += 17; // Protocolo
+        sum += (8 + dnsLen); // Longitud UDP
+
+        for (int i = 20; i < buf.length; i += 2) {
+            if (i == 26) continue;
+            if (i + 1 < buf.length) sum += ((buf[i] & 0xFF) << 8) | (buf[i + 1] & 0xFF);
+            else sum += (buf[i] & 0xFF) << 8;
+        }
+        while ((sum >> 16) != 0) sum = (sum & 0xFFFF) + (sum >> 16);
+        sum = (~sum) & 0xFFFF;
+        if (sum == 0) sum = 0xFFFF;
+        buf[26] = (byte) (sum >> 8);
+        buf[27] = (byte) (sum & 0xFF);
     }
 }
